@@ -22,7 +22,7 @@ container::~container() {
 }
 
 container::ptr_t container::instance() {
-  std::lock_guard<std::mu> lock(c_mutex);
+  std::lock_guard<std::mutex> lock(c_mutex);
   if (!instance_) {
     int fd = ::open("/dev/vfio/vfio", O_RDWR);
     if (fd < 0) {

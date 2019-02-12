@@ -5,9 +5,12 @@
 #include <unistd.h>
 
 #include <iostream>
+#include <mutex>
 #include "vfiocpp.h"
 
 namespace vfio {
+
+std::mutex c_mutex;
 
 container::ptr_t instance_(0);
 
@@ -19,6 +22,7 @@ container::~container() {
 }
 
 container::ptr_t container::instance() {
+  std::lock_guard<std::mu> lock(c_mutex);
   if (!instance_) {
     int fd = ::open("/dev/vfio/vfio", O_RDWR);
     if (fd < 0) {

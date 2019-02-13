@@ -1,12 +1,14 @@
 #include <linux/vfio.h>
+#include <string.h>
 #include <sys/fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include "vfiocpp.h"
 #include <iostream>
 #include <mutex>
-#include "vfiocpp.h"
+#include <stdexcept>
 
 namespace vfio {
 
@@ -46,6 +48,12 @@ container::ptr_t container::instance() {
 
 system_buffer::~system_buffer() {
   if (addr_) {
+    struct vfio_iommu_type1_dma_unmap unmap { .argsz = sizeof(unmap) };
+    unmap.iova = iova_;
+	unmap.size = size_;
+    if (ioctl(container::instance()->descriptor(), VFIO_IOMMU_UNMAP_DMA, &unmap)) {
+        std::cerr << "error unmapping buffer from iommu\n";
+    }
     munmap(addr_, size_);
     addr_ = nullptr;
   }
@@ -71,6 +79,42 @@ system_buffer::ptr_t system_buffer::allocate(size_t sz) {
     return nullptr;
   }
   return system_buffer::ptr_t(new system_buffer(addr, dma_map.iova, sz));
+}
+
+region::ptr_t region::map(int fd, uint64_t offset, size_t sz) {
+  ptr_t ptr(0);
+  auto addr = mmap(nullptr, sz, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS, fd, offset);
+  if (!addr) {
+    std::cerr << "error mapping region: " << strerror(errno) << "\n";
+  } else {
+    ptr.reset(new region(reinterpret_cast<uint8_t *>(addr), sz));
+  }
+
+  return ptr;
+}
+
+#define ASSERT_OFFSET(_sz, _offset)                                            \
+  do {                                                                         \
+    if (_offset > _sz) {                                                       \
+      throw std::length_error("offset greater than size");                                               \
+    }                                                                          \
+  } while (0)
+void region::write32(uint64_t offset, uint32_t value) {
+  ASSERT_OFFSET(size_, offset);
+  *reinterpret_cast<uint32_t *>(ptr_ + offset) = value;
+}
+
+void region::write64(uint64_t offset, uint64_t value) {
+  *reinterpret_cast<uint64_t *>(ptr_ + offset) = value;
+}
+
+uint32_t region::read32(uint64_t offset) {
+  return *reinterpret_cast<uint32_t *>(ptr_ + offset);
+}
+
+uint64_t region::read64(uint64_t offset) {
+  return *reinterpret_cast<uint64_t *>(ptr_ + offset);
 }
 
 device::device(int container, int group_fd, int device_fd)
@@ -114,7 +158,22 @@ device::ptr_t device::open(const std::string &path,
   }
 
   device::ptr_t ptr(new device(group_fd, device_fd, container_fd));
+
+  for (int i = 0; i < device_info.num_regions; ++i) {
+    struct vfio_region_info rinfo = { .argsz = sizeof(rinfo) };
+    rinfo.index = i;
+    if (!ioctl(device_fd, VFIO_DEVICE_GET_REGION_INFO, &rinfo)) {
+        if (rinfo.flags & VFIO_REGION_INFO_FLAG_MMAP) {
+            auto rptr = region::map(device_fd, rinfo.offset, rinfo.size);
+            if (rptr) {
+                ptr->regions_.push_back(rptr);
+            }
+        }
+    }
+  }
+
   return ptr;
 }
 
-}  // end of namespace vfio
+
+} // end of namespace vfio

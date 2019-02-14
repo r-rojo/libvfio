@@ -18,7 +18,7 @@ container::ptr_t instance_(0);
 
 container::container(int fd) : fd_(fd) {}
 container::~container() {
-  if (fd_ >= -1) {
+  if (fd_ > -1) {
     ::close(fd_);
   }
 }

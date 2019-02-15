@@ -17,6 +17,9 @@ jobs:
                 name: Install CMAKE
                 command: 'apt-get update && sudo apt-get install -y cmake'
             - run:
+                name: Install Dependencies
+                command: 'sudo apt-get install -y python-dev'
+            - run:
                 name: CMake configure
                 command: 'cmake -H. -Bbuild'
             - run:

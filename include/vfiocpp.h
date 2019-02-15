@@ -63,6 +63,7 @@ public:
 
   int descriptor() { return device_fd_; }
 
+  const std::vector<region::ptr_t> &regions() const { return regions_; }
   size_t num_regions() const { return regions_.size(); }
 private:
   device(int container, int group_fd, int device_fd);

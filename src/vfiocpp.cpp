@@ -14,7 +14,7 @@ namespace vfio {
 
 std::mutex c_mutex;
 
-container::ptr_t instance_(0);
+container::ptr_t container::instance_(0);
 
 container::container(int fd) : fd_(fd) {}
 container::~container() {
@@ -46,13 +46,19 @@ container::ptr_t container::instance() {
   return instance_;
 }
 
+system_buffer::system_buffer(void *addr, uint64_t iova, size_t sz)
+    : addr_(addr), iova_(iova), size_(sz) {}
+
 system_buffer::~system_buffer() {
   if (addr_) {
-    struct vfio_iommu_type1_dma_unmap unmap { .argsz = sizeof(unmap) };
+    struct vfio_iommu_type1_dma_unmap unmap {
+      .argsz = sizeof(unmap)
+    };
     unmap.iova = iova_;
-	unmap.size = size_;
-    if (ioctl(container::instance()->descriptor(), VFIO_IOMMU_UNMAP_DMA, &unmap)) {
-        std::cerr << "error unmapping buffer from iommu\n";
+    unmap.size = size_;
+    if (ioctl(container::instance()->descriptor(), VFIO_IOMMU_UNMAP_DMA,
+              &unmap)) {
+      std::cerr << "error unmapping buffer from iommu\n";
     }
     munmap(addr_, size_);
     addr_ = nullptr;
@@ -97,7 +103,7 @@ region::ptr_t region::map(int fd, uint64_t offset, size_t sz) {
 #define ASSERT_OFFSET(_sz, _offset)                                            \
   do {                                                                         \
     if (_offset > _sz) {                                                       \
-      throw std::length_error("offset greater than size");                                               \
+      throw std::length_error("offset greater than size");                     \
     }                                                                          \
   } while (0)
 void region::write32(uint64_t offset, uint32_t value) {
@@ -160,20 +166,19 @@ device::ptr_t device::open(const std::string &path,
   device::ptr_t ptr(new device(group_fd, device_fd, container_fd));
 
   for (int i = 0; i < device_info.num_regions; ++i) {
-    struct vfio_region_info rinfo = { .argsz = sizeof(rinfo) };
+    struct vfio_region_info rinfo = {.argsz = sizeof(rinfo)};
     rinfo.index = i;
     if (!ioctl(device_fd, VFIO_DEVICE_GET_REGION_INFO, &rinfo)) {
-        if (rinfo.flags & VFIO_REGION_INFO_FLAG_MMAP) {
-            auto rptr = region::map(device_fd, rinfo.offset, rinfo.size);
-            if (rptr) {
-                ptr->regions_.push_back(rptr);
-            }
+      if (rinfo.flags & VFIO_REGION_INFO_FLAG_MMAP) {
+        auto rptr = region::map(device_fd, rinfo.offset, rinfo.size);
+        if (rptr) {
+          ptr->regions_.push_back(rptr);
         }
+      }
     }
   }
 
   return ptr;
 }
-
 
 } // end of namespace vfio

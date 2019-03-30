@@ -5,7 +5,7 @@
 namespace vfio {
 
 class container {
-public:
+ public:
   typedef std::shared_ptr<container> ptr_t;
   container() = delete;
   ~container();
@@ -13,20 +13,20 @@ public:
   static ptr_t instance();
   int descriptor() { return fd_; }
 
-private:
+ private:
   container(int fd);
   static ptr_t instance_;
   int fd_;
 };
 
 class system_buffer {
-public:
+ public:
   typedef std::shared_ptr<system_buffer> ptr_t;
   system_buffer() = delete;
   ~system_buffer();
   system_buffer::ptr_t allocate(size_t size);
 
-private:
+ private:
   system_buffer(void *addr, uint64_t iova, size_t sz);
   void *addr_;
   uint64_t iova_;
@@ -34,7 +34,7 @@ private:
 };
 
 class region {
-public:
+ public:
   typedef std::shared_ptr<region> ptr_t;
   region() = delete;
   uint8_t *ptr();
@@ -46,15 +46,14 @@ public:
   uint32_t read32(uint64_t offset);
   uint64_t read64(uint64_t offset);
 
-private:
+ private:
   region(uint8_t *ptr, size_t sz) : ptr_(ptr), size_(sz) {}
   uint8_t *ptr_;
   size_t size_;
 };
 
 class device {
-
-public:
+ public:
   typedef std::shared_ptr<device> ptr_t;
   device() = delete;
   ~device();
@@ -65,7 +64,8 @@ public:
 
   const std::vector<region::ptr_t> &regions() const { return regions_; }
   size_t num_regions() const { return regions_.size(); }
-private:
+
+ private:
   device(int container, int group_fd, int device_fd);
   int group_fd_;
   int device_fd_;
@@ -73,5 +73,4 @@ private:
   std::vector<region::ptr_t> regions_;
 };
 
-
-} // end of namespace vfio
+}  // end of namespace vfio

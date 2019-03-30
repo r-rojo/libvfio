@@ -5,10 +5,10 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#include "vfiocpp.h"
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
+#include "vfiocpp.h"
 
 namespace vfio {
 
@@ -100,11 +100,11 @@ region::ptr_t region::map(int fd, uint64_t offset, size_t sz) {
   return ptr;
 }
 
-#define ASSERT_OFFSET(_sz, _offset)                                            \
-  do {                                                                         \
-    if (_offset > _sz) {                                                       \
-      throw std::length_error("offset greater than size");                     \
-    }                                                                          \
+#define ASSERT_OFFSET(_sz, _offset)                        \
+  do {                                                     \
+    if (_offset > _sz) {                                   \
+      throw std::length_error("offset greater than size"); \
+    }                                                      \
   } while (0)
 void region::write32(uint64_t offset, uint32_t value) {
   ASSERT_OFFSET(size_, offset);
@@ -181,4 +181,4 @@ device::ptr_t device::open(const std::string &path,
   return ptr;
 }
 
-} // end of namespace vfio
+}  // end of namespace vfio

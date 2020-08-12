@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cstdint>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
@@ -90,7 +91,12 @@ container::ptr_t container::instance() {
 void container::discover_info()
 {
   // get info to get the size
-  struct vfio_iommu_type1_info iommu_info = { .argsz = sizeof(iommu_info) };
+  struct vfio_iommu_type1_info iommu_info {
+    .argsz = sizeof(iommu_info),
+    .flags = 0,
+    .iova_pgsizes = 0,
+    .cap_offset = 0
+  };
   if (ioctl(fd_, VFIO_IOMMU_GET_INFO, &iommu_info)) {
     std::cerr << "error getting iova range: \"" << strerror(errno) << "\"\n";
     return;
@@ -149,6 +155,7 @@ bool container::reserve(uint64_t &size, uint64_t &iova)
 
 bool container::unreserve(uint64_t iova)
 {
+  (void)iova;
   // TODO: optimize
   return false;
 }
@@ -159,10 +166,12 @@ system_buffer::system_buffer(uint8_t *addr, uint64_t iova, size_t sz)
 system_buffer::~system_buffer() {
   if (addr_ && !parent_) {
     struct vfio_iommu_type1_dma_unmap unmap {
-      .argsz = sizeof(unmap)
+      .argsz = sizeof(unmap),
+      .flags = 0,
+      .iova = iova_,
+      .size = size_
     };
-    unmap.iova = iova_;
-    unmap.size = size_;
+
     if (ioctl(container::instance()->descriptor(), VFIO_IOMMU_UNMAP_DMA,
               &unmap)) {
       std::cerr << "error unmapping buffer from iommu\n";
@@ -332,7 +341,10 @@ device::ptr_t device::open(const std::string &path,
     return nullptr;
   }
 
-  struct vfio_group_status group_status = { .argsz = sizeof(group_status) };
+  struct vfio_group_status group_status = {
+    .argsz = sizeof(group_status),
+    .flags = 0
+  };
   ioctl(group_fd, VFIO_GROUP_GET_STATUS, &group_status);
   if (!(group_status.flags & VFIO_GROUP_FLAGS_VIABLE)) {
     std::cerr << "group is not viable\n";
@@ -349,7 +361,13 @@ device::ptr_t device::open(const std::string &path,
     return nullptr;
   }
 
-	struct vfio_iommu_type1_info iommu_info = { .argsz = sizeof(iommu_info) };
+  struct vfio_iommu_type1_info iommu_info {
+    .argsz = sizeof(iommu_info),
+    .flags = 0,
+    .iova_pgsizes = 0,
+    .cap_offset = 0
+  };
+
 	if (ioctl(container_fd, VFIO_IOMMU_GET_INFO, &iommu_info) < 0) {
     std::cerr << "error getting iommu imfo: " << strerror(errno) << "\n";
 		return nullptr;
@@ -361,14 +379,26 @@ device::ptr_t device::open(const std::string &path,
 		return nullptr;
 	}
 
-  struct vfio_device_info device_info = {.argsz = sizeof(device_info)};
+  struct vfio_device_info device_info = {
+    .argsz = sizeof(device_info),
+    .flags = 0,
+    .num_regions = 0,
+    .num_irqs = 0
+  };
   if (ioctl(device_fd, VFIO_DEVICE_GET_INFO, &device_info)) {
     std::cerr << "error getting device info\n";
     return nullptr;
   }
 
   // get config space
-  struct vfio_region_info cfg_space = {.argsz = sizeof(cfg_space)};
+  struct vfio_region_info cfg_space = {
+    .argsz = sizeof(cfg_space),
+    .flags = 0,
+    .index = VFIO_PCI_CONFIG_REGION_INDEX,
+    .cap_offset = 0,
+    .size = 0,
+    .offset = 0
+  };
   cfg_space.index = VFIO_PCI_CONFIG_REGION_INDEX;
   if (ioctl(device_fd, VFIO_DEVICE_GET_REGION_INFO, &cfg_space)) {
     std::cerr << "Error getting config space, aborting\n";
@@ -379,8 +409,15 @@ device::ptr_t device::open(const std::string &path,
   ptr->cfg_offset_ = cfg_space.offset;
 
   for (uint32_t i = 0; i < device_info.num_regions; ++i) {
-    struct vfio_region_info rinfo = {.argsz = sizeof(rinfo)};
-    rinfo.index = i;
+    struct vfio_region_info rinfo = {
+      .argsz = sizeof(cfg_space),
+      .flags = 0,
+      .index = i,
+      .cap_offset = 0,
+      .size = 0,
+      .offset = 0
+    };
+
     if (!ioctl(device_fd, VFIO_DEVICE_GET_REGION_INFO, &rinfo)) {
       if (rinfo.flags & VFIO_REGION_INFO_FLAG_MMAP) {
         region::ptr_t rptr(0);

@@ -5,6 +5,8 @@ add_library(vfiocpp SHARED
     vfiocpp.cpp
     )
 
-pybind11_add_module(vfio_driver THIN_LTO vfiocpp.cpp vfio_driver.cpp)
-set_target_properties(vfio_driver PROPERTIES PREFIX "${PYTHON_MODULE_PREFIX}"
-                                             SUFFIX ".so")
+if (LIBVFIO_BUILD_PYTHON_BINDINGS)
+    pybind11_add_module(vfio_driver THIN_LTO vfiocpp.cpp vfio_driver.cpp)
+    set_target_properties(vfio_driver PROPERTIES PREFIX "${PYTHON_MODULE_PREFIX}"
+                                                 SUFFIX ".so")
+endif()
